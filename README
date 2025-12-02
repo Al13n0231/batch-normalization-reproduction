@@ -1,0 +1,417 @@
+# Batch Normalization: Paper Reproduction
+
+**Research-Intensive Pathway Project - CS4100**  
+**Northeastern University, Fall 2025**
+
+Reproduction of *"Batch Normalization: Accelerating Deep Network Training by Reducing Internal Covariate Shift"* (Ioffe & Szegedy, 2015)
+
+---
+
+##  Project Overview
+
+This project implements Batch Normalization from scratch and reproduces the key experiments from the seminal paper. The implementation includes custom BatchNorm layers (both 1D and 2D variants) and validates the paper's claims across multiple datasets and architectures.
+
+### Paper Reference
+- **Title:** Batch Normalization: Accelerating Deep Network Training by Reducing Internal Covariate Shift
+- **Authors:** Sergey Ioffe, Christian Szegedy
+- **Published:** ICML 2015
+- **arXiv:** [https://arxiv.org/abs/1502.03167](https://arxiv.org/abs/1502.03167)
+
+---
+
+##  Results Summary
+
+### Experiment 1: MNIST (Paper Section 4.1)
+
+| Model | Test Accuracy | Training Time | Paper Comparison |
+|-------|---------------|---------------|------------------|
+| Without BN | 94.92% | 1:17 | ~95%  |
+| With BN | 98.15% | 1:40 | ~98%  |
+| **Improvement** | +3.23% | - | ~3% |
+
+**Key Findings:**
+- Successfully reproduced paper's results
+- BN improves accuracy by 3.23 percentage points
+- Error rate reduced by 63% (5.08% → 1.85%)
+
+### Experiment 2: CIFAR-10 CNN (Generalization)
+
+| Model | Test Accuracy (5K steps) | Test Accuracy (50K steps) |
+|-------|--------------------------|---------------------------|
+| Without BN | 10.00% (failed) | 82.71% |
+| With BN | 74.96% | 85.23% |
+| **Improvement** | **+64.96%** | **+2.52%** |
+
+**Key Findings:**
+- Without BN: Failed to learn in early training (stuck at 10% for 5K steps)
+- With BN: Immediate learning, reached 75% in just 5K steps
+- BN provides ~10× faster convergence to high accuracy
+- Demonstrates BN is essential for deeper networks
+
+### Experiment 3: Learning Rate Robustness
+
+| Learning Rate | Without BN | With BN | Gap |
+|--------------|------------|---------|-----|
+| 0.01 (1×) | 11.35% | 96.01% | +84.66% |
+| 0.05 (5×) | 62.38% | 96.48% | +34.10% |
+| 0.10 (10×) | 93.10% | 97.29% | +4.19% |
+
+**Key Findings:**
+- BN enables stable training across wide range of learning rates
+- Without BN: Must carefully tune LR (highly sensitive)
+- Validates paper's Section 3.3 claim
+
+---
+
+##  Project Structure
+
+```
+batch-normalization-reproduction/
+├── src/
+│   ├── batch_norm.py          # Core BN implementation (Algorithm 1 & 2)
+│   ├── models.py              # SimpleNet (3-layer FC for MNIST)
+│   ├── cnn_model.py           # SimpleCNN (CNN for CIFAR-10)
+│   └── test_bn.py             # Unit tests for BatchNorm
+│
+├── experiments/
+│   ├── mnist_experiment.py         # MNIST reproduction (Section 4.1)
+│   ├── cifar10_cnn_experiment.py   # CIFAR-10 CNN experiment
+│   └── test_learning_rates.py      # Learning rate stability test
+│
+├── results/
+│   └── plots/
+│       ├── mnist_comparison.png      # MNIST results visualization
+│       └── cifar10_cnn_comparison.png # CIFAR-10 results visualization
+│
+├── data/                      # Auto-downloaded datasets (MNIST, CIFAR-10)
+├── requirements.txt           # Python dependencies
+└── README.md                  # This file
+```
+
+---
+
+##  Quick Start
+
+### Installation
+
+```bash
+# Clone the repository
+git clone https://github.com/YOUR_USERNAME/batch-normalization-reproduction.git
+cd batch-normalization-reproduction
+
+# Create conda environment
+conda create -n bn-project python=3.11 -y
+conda activate bn-project
+
+# Install dependencies
+conda install pytorch torchvision numpy matplotlib tqdm -c pytorch -y
+```
+
+### Running Experiments
+
+```bash
+# Test BatchNorm implementation
+cd src
+python test_bn.py
+
+# Run MNIST experiment (reproduces Section 4.1)
+cd ../experiments
+python mnist_experiment.py
+
+# Run CIFAR-10 CNN experiment
+python cifar10_cnn_experiment.py
+
+# Test learning rate robustness (Section 3.3)
+python test_learning_rates.py
+```
+
+---
+
+##  Implementation Details
+
+### BatchNorm1d (Fully-Connected Layers)
+
+Implements Algorithms 1 and 2 from the paper for fully-connected layers.
+
+**Key Features:**
+- Separate training/inference modes
+- Exponential moving average for running statistics (momentum=0.1)
+- Bessel's correction for unbiased variance estimation
+- Learnable scale (γ) and shift (β) parameters
+- Numerical stability with epsilon=1e-5
+
+**From the paper:**
+- Training: Uses batch statistics (μ_B, σ²_B)
+- Inference: Uses population statistics (running_mean, running_var)
+
+### BatchNorm2d (Convolutional Layers)
+
+Implements Section 3.2 for convolutional layers.
+
+**Key Features:**
+- Normalizes per channel across (batch, height, width)
+- One γ/β pair per channel (preserves convolutional property)
+- Effective batch size = batch × height × width
+- Maintains translation invariance
+
+**From the paper (Section 3.2):**
+ "For convolutional layers, we additionally want the normalization to obey the convolutional property – so that different elements of the same feature map, at different locations, are normalized in the same way."
+
+### SimpleNet Architecture (MNIST)
+
+Exactly matches Paper Section 4.1 specification:
+- **Input:** 28×28 grayscale images (784 dimensions, flattened)
+- **Hidden layers:** 3 layers with 100 neurons each
+- **Activation:** Sigmoid (demonstrates BN with saturating nonlinearities)
+- **Output:** 10 classes (digits 0-9)
+- **Initialization:** Small random Gaussian (mean=0, std=0.01)
+- **Key detail:** No bias in layers with BN (β subsumes bias role)
+
+### SimpleCNN Architecture (CIFAR-10)
+
+Custom CNN demonstrating Section 3.2:
+- **Input:** 32×32 RGB images (3 channels)
+- **Conv blocks:** 3 blocks (Conv → BN → ReLU → MaxPool)
+  - Block 1: 3→32 channels, 32×32 → 16×16
+  - Block 2: 32→64 channels, 16×16 → 8×8
+  - Block 3: 64→128 channels, 8×8 → 4×4
+- **FC layers:** 2048→128→10
+- **Total parameters:** ~357K (with BN)
+
+---
+
+##  Experimental Setup
+
+### MNIST Experiment
+
+**Matching Paper Specifications:**
+- Training steps: 50,000
+- Batch size: 60
+- Optimizer: SGD with momentum=0.9
+- Learning rate: 0.01
+- Loss: Cross-entropy
+- Hardware: CPU (Apple Silicon)
+
+**Training Time:** ~1:40 per model (50K steps on CPU)
+
+### CIFAR-10 CNN Experiment
+
+**Setup:**
+- Training steps: 50,000
+- Batch size: 128
+- Optimizer: SGD with momentum=0.9, weight_decay=5e-4
+- Learning rate: 0.01
+- Data augmentation: RandomHorizontalFlip, RandomCrop(32, padding=4)
+- Hardware: CPU
+
+**Training Time:** ~1:45 per model (50K steps on CPU)
+
+---
+
+##  Key Insights from Implementation
+
+### What Worked Well
+1. **Exact algorithm reproduction:** Our BN matches PyTorch to machine precision
+2. **Paper results validated:** MNIST accuracy within 0.2% of paper
+3. **Generalization confirmed:** BN improves performance on CIFAR-10 as well
+4. **Learning rate robustness:** Experimentally verified Section 3.3 claims
+
+### Challenges Encountered
+1. **Bessel's correction:** Understanding when to use biased (1/m) vs unbiased (1/(m-1)) variance
+2. **Train/inference modes:** Ensuring correct behavior switch for BN
+3. **Gradient flow:** Properly using `torch.no_grad()` for running statistics
+4. **BatchNorm2d:** Understanding per-channel normalization for CNNs
+
+### Implementation Decisions
+1. **Momentum=0.1:** Standard PyTorch default (paper doesn't specify)
+2. **Epsilon=1e-5:** Standard value for numerical stability
+3. **No bias with BN:** Follows paper's Section 3.2 recommendation
+4. **Data augmentation for CIFAR-10:** Standard practice for image classification
+
+---
+
+##  Code Documentation
+
+### Core Files
+
+#### `src/batch_norm.py`
+Contains the core Batch Normalization implementation.
+
+**Classes:**
+- `BatchNorm1d`: For fully-connected layers
+  - Normalizes across batch dimension
+  - One γ/β per feature
+  - Implements Algorithm 1 (training) and Algorithm 2 (inference)
+  
+- `BatchNorm2d`: For convolutional layers
+  - Normalizes per channel across (batch, height, width)
+  - One γ/β per channel (shared across spatial locations)
+  - Preserves translation invariance
+
+**Key Methods:**
+- `forward(x, training)`: Main computation
+  - `training=True`: Use batch statistics, update running stats
+  - `training=False`: Use running statistics (deterministic)
+- `parameters()`: Returns learnable γ and β for optimizer
+
+#### `src/models.py`
+SimpleNet architecture for MNIST.
+
+**Specifications:**
+- Input: 784 (28×28 flattened)
+- Hidden: 3 layers × 100 neurons
+- Output: 10 classes
+- Activation: Sigmoid
+- Optional BN before each activation
+
+#### `src/cnn_model.py`
+SimpleCNN architecture for CIFAR-10.
+
+**Specifications:**
+- 3 convolutional blocks (Conv → BN → ReLU → MaxPool)
+- 2 fully-connected layers
+- ~357K parameters
+- Uses both BatchNorm2d (conv) and BatchNorm1d (FC)
+
+### Experiment Files
+
+#### `experiments/mnist_experiment.py`
+Reproduces Section 4.1 of the paper.
+
+**What it does:**
+- Trains SimpleNet with and without BN
+- Compares convergence speed and final accuracy
+- Generates comparison plots
+
+**Usage:**
+```bash
+python mnist_experiment.py
+```
+
+#### `experiments/cifar10_cnn_experiment.py`
+Tests generalization to CIFAR-10 with CNNs.
+
+**What it does:**
+- Trains SimpleCNN with and without BN
+- Demonstrates Section 3.2 (BatchNorm for CNNs)
+- Shows BN enables learning in deeper networks
+
+**Usage:**
+```bash
+python cifar10_cnn_experiment.py
+```
+
+#### `experiments/test_learning_rates.py`
+Validates Section 3.3 (higher learning rates).
+
+**What it does:**
+- Tests learning rates: 0.01, 0.05, 0.1
+- Shows BN provides learning rate robustness
+- Quick experiment (~20 minutes)
+
+**Usage:**
+```bash
+python test_learning_rates.py
+```
+
+---
+
+##  Technical Details
+
+### Algorithm 1: Batch Normalizing Transform (Training)
+
+```
+Input: Values of x over mini-batch B = {x₁...xₘ}
+Parameters: γ, β
+
+1. μ_B ← (1/m) Σᵢ₌₁ᵐ xᵢ              // Mini-batch mean
+2. σ²_B ← (1/m) Σᵢ₌₁ᵐ (xᵢ - μ_B)²    // Mini-batch variance
+3. x̂ᵢ ← (xᵢ - μ_B) / √(σ²_B + ε)     // Normalize
+4. yᵢ ← γx̂ᵢ + β                      // Scale and shift
+
+Output: {yᵢ = BN_γ,β(xᵢ)}
+```
+
+### Algorithm 2: Inference with Population Statistics
+
+During inference, replace batch statistics with population statistics:
+- E[x] ← E_B[μ_B] (average of all training batch means)
+- Var[x] ← (m/(m-1)) · E_B[σ²_B] (Bessel's correction applied)
+
+Transform becomes a simple linear operation:
+```
+y = [γ/√(Var[x]+ε)] · x + [β - γ·E[x]/√(Var[x]+ε)]
+```
+
+### BatchNorm2d for Convolutional Layers (Section 3.2)
+
+For input shape (N, C, H, W):
+- Compute statistics over dimensions (N, H, W) for each channel C
+- Effective batch size: N × H × W
+- One γ/β pair per channel (NOT per pixel!)
+- Preserves convolutional property (translation invariance)
+
+---
+
+##  Visualizations
+
+### MNIST Training Curves
+
+![MNIST Comparison](results/plots/mnist_comparison.png)
+
+**Left plot:** Test accuracy over training steps
+- BN (orange) reaches high accuracy faster
+- Final accuracy: 98.15% vs 94.92%
+
+**Right plot:** Training loss over time (smoothed)
+- BN (orange) decreases loss faster
+- More stable convergence
+
+### CIFAR-10 Training Curves
+
+![CIFAR-10 Comparison](results/plots/cifar10_cnn_comparison.png)
+
+**Key observation:** Without BN stuck at 10% (random guessing) for first 5K steps, while BN immediately learns and reaches 75%.
+
+---
+
+##  Testing
+
+### Verify BatchNorm Implementation
+
+```bash
+cd src
+python test_bn.py
+```
+
+**Expected output:**
+- Output mean ≈ 0 (within 1e-8)
+- Output variance ≈ 1.0 (exactly)
+- Gradients flow correctly (all True)
+
+---
+
+##  References
+
+### Primary Paper
+Ioffe, S., & Szegedy, C. (2015). Batch Normalization: Accelerating Deep Network Training by Reducing Internal Covariate Shift. *International Conference on Machine Learning (ICML)*.
+
+### Related Work Mentioned in Critical Evaluation
+Santurkar, S., Tsipras, D., Ilyas, A., & Madry, A. (2018). How Does Batch Normalization Help Optimization? *NeurIPS*.
+
+---
+
+## Author
+
+**Zenan Yang**   
+CS4100 - Artificial Intelligence  
+Research-Intensive Pathway, Fall 2025
+
+---
+
+## License
+
+This project is for academic purposes (CS4100 Research-Intensive Pathway).
+
+
+*Last updated: December 2 2025*
